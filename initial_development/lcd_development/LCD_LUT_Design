@@ -1,0 +1,133 @@
+--------------------------------------------------------------------------------
+-- Filename: lcd_lut.vhd
+--------------------------------------------------------------------------------
+-- Description: A lookup table to decide what data (O_LCD_DATA) gets displayed
+--              to the LCD module depending on the current mode (I_MODE).
+--
+--              See moodle description for text to show and when.
+--
+--              For screens showing address and data, need to convert from
+--              binary (hex) to Ascii Hex. See last section for more info.
+--
+--              For info on t_lcd_display_data type and how to set it, look at
+--              keypad_lcd_display_ut.vhd:~226.
+--
+--              Suggest using constants for reference instead of descrete ascii
+--              values. See keypad_lcd_display_ut.vhd:~122
+--
+--              No trigger is required for data write to LCD, instead when the
+--              driver detects a change in input "screen" data, it redraws the
+--              screen.
+--
+--              For this reason, O_LCD_DATA should be set in a clocked process,
+--              but conditional logic for address and data conversion can be
+--              done using asyncronus (non-clocked) (outside of processes) signal
+--              logic:
+--
+--              Conditional assignment:
+--              SIGNAL <= VALUE1 when condition1
+--                   else VALUE2 when condition2
+--                   else VALUE3 when condition3;
+--                   else VALUE;
+--
+--------------------------------------------------------------------------------
+-- Port Definition for LCD LUT
+--------------------------------------------------------------------------------
+I_CLK      : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
+I_RESET_N  : in std_logic;  -- System reset (active low)
+
+-- Mode of operation
+-- 00: Initialization
+-- 01: Test
+-- 10: Pause
+-- 11: PWM Generation
+I_MODE     : in std_logic_vector(1 downto 0);
+
+-- Output Frequency
+-- 00: 60 Hz
+-- 01: 120 Hz
+-- 10: 1000 Hz (1KHz)
+-- 11: Undefined (pick one)
+I_PWM_FREQ : in std_logic_vector(1 downto 0);
+
+-- 16-bit Data (4 hex nibbles)
+I_DATA     : in std_logic_vector(15 downto 0);
+
+-- 8-bit Address (2 hex nibbles)
+I_ADDRESS  : in std_logic_vector(7 downto 0);
+
+-- need to include package:
+--
+-- library work;
+--  use work.lcd_keypad_dev_util.all;
+--
+-- Output LCD "screen" array type (see lcd_display_driver.vhd:19 for type def)
+O_LCD_DATA : out t_lcd_display_data;
+--------------------------------------------------------------------------------
+
+-- Look up for Ascii address (use for address and data), look up an Ascii table for reference
+ADDRESS_ASCII(7 downto 0) <= "0011" & I_ADDRESS(7 downto 4) when I_ADDRESS(7 downto 4) < x"A"   -- 0-9
+                  else x"41"                                when I_ADDRESS(7 downto 4) = x"A"   -- A
+                  else x"42"                                when I_ADDRESS(7 downto 4) = x"B"   -- B
+                  else x"43"                                when I_ADDRESS(7 downto 4) = x"C"   -- C
+                  else x"44"                                when I_ADDRESS(7 downto 4) = x"D"   -- D
+                  else x"45"                                when I_ADDRESS(7 downto 4) = x"E"   -- E
+                  else x"46"                                when I_ADDRESS(7 downto 4) = x"F";  -- F
+                  else x"47"                                when I_ADDRESS(7 downto 4) = x"G";  -- G
+                  else x"48"                                when I_ADDRESS(7 downto 4) = x"H";  -- H
+                  else x"49"                                when I_ADDRESS(7 downto 4) = x"I";  -- I
+                  else x"4A"                                when I_ADDRESS(7 downto 4) = x"J";  -- J
+                  else x"4B"                                when I_ADDRESS(7 downto 4) = x"K";  -- K
+                  else x"4C"                                when I_ADDRESS(7 downto 4) = x"L";  -- L
+                  else x"4D"                                when I_ADDRESS(7 downto 4) = x"M";  -- M
+                  else x"4E"                                when I_ADDRESS(7 downto 4) = x"N";  -- N
+                  else x"4F"                                when I_ADDRESS(7 downto 4) = x"O";  -- O
+                  else x"50"                                when I_ADDRESS(7 downto 4) = x"P";  -- P
+                  else x"51"                                when I_ADDRESS(7 downto 4) = x"Q";  -- Q
+                  else x"52"                                when I_ADDRESS(7 downto 4) = x"R";  -- R
+                  else x"53"                                when I_ADDRESS(7 downto 4) = x"S";  -- S
+                  else x"54"                                when I_ADDRESS(7 downto 4) = x"T";  -- T
+                  else x"55"                                when I_ADDRESS(7 downto 4) = x"U";  -- U
+                  else x"56"                                when I_ADDRESS(7 downto 4) = x"V";  -- V
+                  else x"57"                                when I_ADDRESS(7 downto 4) = x"W";  -- W
+                  else x"58"                                when I_ADDRESS(7 downto 4) = x"X";  -- X
+                  else x"59"                                when I_ADDRESS(7 downto 4) = x"Y";  -- Y
+                  else x"5A"                                when I_ADDRESS(7 downto 4) = x"Z";  -- Z
+                  else x"5B"                                when I_ADDRESS(7 downto 4) = x"[";  -- [
+                  else x"5C"                                when I_ADDRESS(7 downto 4) = x"/";  -- /
+                  else x"5D"                                when I_ADDRESS(7 downto 4) = x"]";  -- ]
+                  else x"5E"                                when I_ADDRESS(7 downto 4) = x"^";  -- ^
+                  else x"5F"                                when I_ADDRESS(7 downto 4) = x"_";  -- _
+                  else x"60"                                when I_ADDRESS(7 downto 4) = x"`";  -- `
+                  else x"61"                                when I_ADDRESS(7 downto 4) = x"a";  -- a
+                  else x"62"                                when I_ADDRESS(7 downto 4) = x"b";  -- b
+                  else x"63"                                when I_ADDRESS(7 downto 4) = x"c";  -- c
+                  else x"64"                                when I_ADDRESS(7 downto 4) = x"d";  -- d
+                  else x"65"                                when I_ADDRESS(7 downto 4) = x"e";  -- e
+                  else x"66"                                when I_ADDRESS(7 downto 4) = x"f";  -- f
+                  else x"67"                                when I_ADDRESS(7 downto 4) = x"g";  -- g
+                  else x"68"                                when I_ADDRESS(7 downto 4) = x"h";  -- h
+                  else x"69"                                when I_ADDRESS(7 downto 4) = x"i";  -- i
+                  else x"6A"                                when I_ADDRESS(7 downto 4) = x"j";  -- j
+                  else x"6B"                                when I_ADDRESS(7 downto 4) = x"k";  -- k
+                  else x"6C"                                when I_ADDRESS(7 downto 4) = x"l";  -- l
+                  else x"6D"                                when I_ADDRESS(7 downto 4) = x"m";  -- m
+                  else x"6E"                                when I_ADDRESS(7 downto 4) = x"n";  -- n
+                  else x"6F"                                when I_ADDRESS(7 downto 4) = x"o";  -- o
+                  else x"70"                                when I_ADDRESS(7 downto 4) = x"p";  -- p
+                  else x"71"                                when I_ADDRESS(7 downto 4) = x"q";  -- q
+                  else x"72"                                when I_ADDRESS(7 downto 4) = x"r";  -- r
+                  else x"73"                                when I_ADDRESS(7 downto 4) = x"s";  -- s
+                  else x"74"                                when I_ADDRESS(7 downto 4) = x"t";  -- t
+                  else x"75"                                when I_ADDRESS(7 downto 4) = x"u";  -- u
+                  else x"76"                                when I_ADDRESS(7 downto 4) = x"v";  -- v
+                  else x"77"                                when I_ADDRESS(7 downto 4) = x"w";  -- w
+                  else x"78"                                when I_ADDRESS(7 downto 4) = x"x";  -- x
+                  else x"79"                                when I_ADDRESS(7 downto 4) = x"y";  -- y
+                  else x"7A"                                when I_ADDRESS(7 downto 4) = x"z";  -- z
+                  else x"3A"                                when I_ADDRESS(7 downto 4) = x":";  -- :
+
+
+				  
+				  
+				  
