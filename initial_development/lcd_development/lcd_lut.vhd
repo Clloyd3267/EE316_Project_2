@@ -18,7 +18,7 @@ library ieee;
   use ieee.numeric_std.all;
 
 library work;
-  use work.lcd_keypad_dev_util.all;
+  use work.lcd_screen_util.all;
 
 --------------
 --  Entity  --

@@ -18,9 +18,9 @@ library ieee;
   use ieee.std_logic_1164.all;
   use ieee.numeric_std.all;
 -- Custom package for LCD data representing a "screen" (16x2) of data.
-package lcd_keypad_dev_util is
+package lcd_screen_util is
   type t_lcd_display_data is array (31 downto 0) of std_logic_vector(7 downto 0);
-end package lcd_keypad_dev_util;
+end package lcd_screen_util;
 
 -----------------
 --  Libraries  --
