@@ -62,7 +62,7 @@ end entity memory_pwm_generator_top;
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture behavioral of keypad_lcd_display_ut is
+architecture behavioral of memory_pwm_generator_top is
 
   ----------------
   -- Components --
@@ -196,19 +196,19 @@ architecture behavioral of keypad_lcd_display_ut is
   -- 01: Test
   -- 10: Pause
   -- 11: PWM Generation
-  constant C_INIT  : std_logic_vector(1 downto 0) := 00;_MODE
-  constant C_TEST  : std_logic_vector(1 downto 0) := 01;_MODE
-  constant C_PAUSE : std_logic_vector(1 downto 0) := 10;_MODE
-  constant C_PWM   : std_logic_vector(1 downto 0) := 11;_MODE
+  constant C_INIT_MODE  : std_logic_vector(1 downto 0) := "00";
+  constant C_TEST_MODE  : std_logic_vector(1 downto 0) := "01";
+  constant C_PAUSE_MODE : std_logic_vector(1 downto 0) := "10";
+  constant C_PWM_MODE   : std_logic_vector(1 downto 0) := "11";
 
   -- Output Frequency
   -- 00: 60 Hz
   -- 01: 120 Hz
   -- 10: 1000 Hz (1KHz)
   -- 11: Undefined (pick one)
-  constant C_60_HZ  : std_logic_vector(1 downto 0) := 00;
-  constant C_120_HZ : std_logic_vector(1 downto 0) := 01;
-  constant C_1_KHZ  : std_logic_vector(1 downto 0) := 10;
+  constant C_60_HZ  : std_logic_vector(1 downto 0) := "00";
+  constant C_120_HZ : std_logic_vector(1 downto 0) := "01";
+  constant C_1_KHZ  : std_logic_vector(1 downto 0) := "10";
 
   -- Inital System reset time in ms
   constant C_RESET_TIME_MS : integer := 25;
@@ -224,6 +224,7 @@ architecture behavioral of keypad_lcd_display_ut is
   -------------
 
   signal s_lcd_data        : t_lcd_display_data;             -- Data to be displayed on LCD
+  signal s_lcd_lut_data    : t_lcd_display_data;             -- Data from LCD LUT
   signal s_lcd_busy        : std_logic;                      -- Busy signal from LCD
 
   signal s_i2c_busy        : std_logic;                      -- Busy signal from I2C
@@ -295,11 +296,11 @@ begin
   (
     I_CLK          => I_CLK_50_MHZ,
     I_RESET_N      => s_reset_n,
-    I_MODE         => s_curr_mode,
+    I_MODE         => s_curr_mode, -- s_curr_mode / C_PAUSE_MODE
     I_PWM_FREQ     => s_curr_pwm_freq,
     I_DATA         => s_curr_data,
     I_ADDRESS      => s_curr_address,
-    O_LCD_DATA     => s_lcd_data
+    O_LCD_DATA     => s_lcd_lut_data
   );
 
   -- Device driver for 7SD
@@ -329,7 +330,7 @@ begin
   (
     I_CLK            => I_CLK_50_MHZ,
     I_RESET_N        => s_reset_n,
-    I_BUTTON         => not I_RESET_N;
+    I_BUTTON         => not I_RESET_N,
     O_BUTTON         => s_key_0_debounced
   );
 
@@ -523,12 +524,13 @@ begin
       -- Initialization mode
       if (s_curr_mode = C_INIT_MODE) then
         -- Wait for ROM data to be loaded into SRAM
-        if (s_current_address = C_MAX_ADDRESS) and
-           (s_address_toggle = '1') then
-          s_curr_mode <= C_TEST_MODE;
-        else
-          s_curr_mode <= s_curr_mode;
-        end if;
+--        if (s_current_address = C_MAX_ADDRESS) and
+--           (s_address_toggle = '1') then
+--          s_curr_mode <= C_TEST_MODE;
+--        else
+--          s_curr_mode <= s_curr_mode;
+--        end if;
+		  s_curr_mode <= C_TEST_MODE;
 
       -- Test mode
       elsif (s_curr_mode = C_TEST_MODE) then
@@ -603,7 +605,20 @@ begin
     end if;
   end process FREQ_STATE_MACHINE;
   ------------------------------------------------------------------------------
+  
+  process (I_CLK_50_MHZ, s_reset_n) -- CDl=> Here
+  begin
+    if (s_reset_n = '0') then
+      s_lcd_data <= (others=>(others=>'0'));
 
+    elsif (rising_edge(I_CLK_50_MHZ)) then
+		if (s_lcd_busy = '0') then
+			s_lcd_data <= s_lcd_lut_data;
+		end if;
+    end if;
+  end process;
+  ------------------------------------------------------------------------------  
+  
   -- Reset system (low) when counter reset signal is low or system reset is low
   s_reset_n <= s_cntr_reset_n and (not s_key_0_debounced);
 

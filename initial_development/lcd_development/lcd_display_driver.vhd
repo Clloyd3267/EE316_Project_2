@@ -30,7 +30,7 @@ library ieee;
   use ieee.numeric_std.all;
 
 library work;
-  use work.lcd_keypad_dev_util.all;
+  use work.lcd_screen_util.all;
 
 --------------
 --  Entity  --
@@ -105,8 +105,9 @@ architecture rtl of lcd_display_driver is
   ---------------
   -- Constants --
   ---------------
-  constant C_LCD_INDEX_CNTR_MAX : integer := 32;
+  constant C_LCD_INDEX_CNTR_MAX : integer := 33;
   constant C_LCD_ADDRESS_0X40   : std_logic_vector(6 downto 0) :="1000000";  -- Address 40 (start of line 2)
+  constant C_LCD_CLR_DISP       : std_logic_vector(6 downto 0) :="0000001";  -- Address 40 (start of line 2)
 
   -------------
   -- SIGNALS --
@@ -127,7 +128,7 @@ architecture rtl of lcd_display_driver is
   signal s_lcd_enable       : std_logic;
   signal s_lcd_busy         : std_logic;
 
-  signal s_lcd_index_cntr   : integer := 0;  -- Counter for LCD index (0-31)
+  signal s_lcd_index_cntr   : integer := 0;  -- Counter for LCD index (0-33)
   signal s_lcd_write_mode   : std_logic;     -- Data: '0', Address: '1'
 
   signal s_lcd_rw           : std_logic;
@@ -287,7 +288,7 @@ begin
 
       -- Data or Address selection logic
       if (s_lcd_curr_state = NEXT_STATE) and (s_lcd_busy = '0') then
-        if ((s_lcd_index_cntr = 16) and (s_lcd_write_mode = '0')) then
+        if ((s_lcd_index_cntr = 17) and (s_lcd_write_mode = '0')) then
           s_lcd_write_mode <= '1';
         else
           s_lcd_write_mode <= '0';
@@ -298,7 +299,7 @@ begin
 
       -- Data Byte Index logic
       if (s_lcd_curr_state = NEXT_STATE) and (s_lcd_busy = '0') then
-        if ((s_lcd_index_cntr = 16) and (s_lcd_write_mode = '0')) then
+        if ((s_lcd_index_cntr = 17) and (s_lcd_write_mode = '0')) then
           s_lcd_index_cntr <= s_lcd_index_cntr;
         elsif (s_lcd_index_cntr /= C_LCD_INDEX_CNTR_MAX) then
           s_lcd_index_cntr <= s_lcd_index_cntr + 1;
@@ -310,7 +311,10 @@ begin
       end if;
 
       -- Data byte logic
-      if (s_lcd_write_mode = '0') then  -- Data
+      if (s_lcd_index_cntr = 0) then
+			s_lcd_write_byte  <= "1" & "0000000"; -- CDL=> Fix later
+			s_lcd_rs          <= '0';
+		elsif (s_lcd_write_mode = '0') then  -- Data
         s_lcd_write_byte   <= s_lcd_data_latched(C_LCD_INDEX_CNTR_MAX - s_lcd_index_cntr);
         s_lcd_rs           <= '1';
       else  -- Address

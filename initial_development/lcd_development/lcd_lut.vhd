@@ -64,19 +64,19 @@ architecture rtl of lcd_lut is
   -- 01: Test
   -- 10: Pause
   -- 11: PWM Generation
-  constant C_MODE_INIT  : std_logic_vector(1 downto 0) := 00;
-  constant C_MODE_TEST  : std_logic_vector(1 downto 0) := 01;
-  constant C_MODE_PAUSE : std_logic_vector(1 downto 0) := 10;
-  constant C_MODE_PWM   : std_logic_vector(1 downto 0) := 11;
+  constant C_MODE_INIT  : std_logic_vector(1 downto 0) := "00";
+  constant C_MODE_TEST  : std_logic_vector(1 downto 0) := "01";
+  constant C_MODE_PAUSE : std_logic_vector(1 downto 0) := "10";
+  constant C_MODE_PWM   : std_logic_vector(1 downto 0) := "11";
 
   -- Output Frequency
   -- 00: 60 Hz
   -- 01: 120 Hz
   -- 10: 1000 Hz (1KHz)
   -- 11: Undefined (pick one)
-  constant C_60_HZ  : std_logic_vector(1 downto 0) := 00;
-  constant C_120_HZ : std_logic_vector(1 downto 0) := 01;
-  constant C_1_KHZ  : std_logic_vector(1 downto 0) := 10;
+  constant C_60_HZ  : std_logic_vector(1 downto 0) := "00";
+  constant C_120_HZ : std_logic_vector(1 downto 0) := "01";
+  constant C_1_KHZ  : std_logic_vector(1 downto 0) := "10";
 
   -- Ascii constants for writing "Strings"
   -- Upper case alphabet
@@ -190,30 +190,30 @@ begin
 
         when C_MODE_TEST  =>
           -- [...Test.Mode....]
-          -- [.0xFF.:.0xFFFF..]
+          -- [..0xFF.:.0xFFFF.]
           O_LCD_DATA <=
           (
-            SP, SP, SP, UT, LE, LS, LT, SP, UM, LO, LD, LE, SP, SP, SP, SP,
+            SP, SP, UT, LE, LS, LT, SP, UM, LO, LD, LE, SP, SP, SP, SP, SP,
             SP, N0, LX, s_addr_ascii(1), s_addr_ascii(0), SP, CL, SP, N0, LX,
             s_data_ascii(3), s_data_ascii(2), s_data_ascii(1), s_data_ascii(0),
             SP, SP
           );
 
-          when C_MODE_PAUSE =>
-          -- [...Pause.Mode...]
+         when C_MODE_PAUSE =>
+          -- [..Pause.Mode....]
           -- [................]
           O_LCD_DATA <=
           (
-            SP, SP, SP, UP, LA, LU, LS, LE, SP, UM, UO, UD, UE, SP, SP, SP,
+            SP, SP, UP, LA, LU, LS, LE, SP, UM, LO, LD, LE, SP, SP, SP, SP, 
             SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP
           );
 
         when C_MODE_PWM   =>
-          -- [.PWM.Generation.]
-          -- [.Freq.:.NNNN.Hz.]
+          -- [PWM.Generation..]
+          -- [..Freq.:.NNNN.Hz]
           O_LCD_DATA <=
           (
-            SP, UP, UW, UM, SP, UG, LE, LN, LE, LR, LA, LT, LI, LO, LN, SP,
+            UP, UW, UM, SP, UG, LE, LN, LE, LR, LA, LT, LI, LO, LN, SP, SP, 
             SP, UF, LR, LE, LQ, SP, CL, SP, s_freq_ascii(6), s_freq_ascii(5),
             s_freq_ascii(4), s_freq_ascii(3), s_freq_ascii(2), s_freq_ascii(1),
             s_freq_ascii(0), SP
@@ -279,6 +279,7 @@ begin
                 else x"44"                       when I_DATA(15 downto 12) = x"D"   -- D
                 else x"45"                       when I_DATA(15 downto 12) = x"E"   -- E
                 else x"46"                       when I_DATA(15 downto 12) = x"F";  -- F
+					 
   -- Frequency ascii "string"
   s_freq_ascii <= (N6, N0, SP, UH, LZ, SP, SP) when I_PWM_FREQ = C_60_HZ
              else (N1, N2, N0, SP, UH, LZ, SP) when I_PWM_FREQ = C_120_HZ
