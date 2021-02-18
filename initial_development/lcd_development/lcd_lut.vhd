@@ -53,7 +53,7 @@ end entity lcd_lut;
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture rtl of lcd_lut is
+architecture behavioral of lcd_lut is
 
   ---------------
   -- Constants --
@@ -204,7 +204,7 @@ begin
           -- [................]
           O_LCD_DATA <=
           (
-            SP, SP, UP, LA, LU, LS, LE, SP, UM, LO, LD, LE, SP, SP, SP, SP, 
+            SP, SP, UP, LA, LU, LS, LE, SP, UM, LO, LD, LE, SP, SP, SP, SP,
             SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP
           );
 
@@ -213,7 +213,7 @@ begin
           -- [..Freq.:.NNNN.Hz]
           O_LCD_DATA <=
           (
-            UP, UW, UM, SP, UG, LE, LN, LE, LR, LA, LT, LI, LO, LN, SP, SP, 
+            UP, UW, UM, SP, UG, LE, LN, LE, LR, LA, LT, LI, LO, LN, SP, SP,
             SP, UF, LR, LE, LQ, SP, CL, SP, s_freq_ascii(6), s_freq_ascii(5),
             s_freq_ascii(4), s_freq_ascii(3), s_freq_ascii(2), s_freq_ascii(1),
             s_freq_ascii(0), SP
@@ -279,10 +279,10 @@ begin
                 else x"44"                       when I_DATA(15 downto 12) = x"D"   -- D
                 else x"45"                       when I_DATA(15 downto 12) = x"E"   -- E
                 else x"46"                       when I_DATA(15 downto 12) = x"F";  -- F
-					 
+
   -- Frequency ascii "string"
   s_freq_ascii <= (N6, N0, SP, UH, LZ, SP, SP) when I_PWM_FREQ = C_60_HZ
              else (N1, N2, N0, SP, UH, LZ, SP) when I_PWM_FREQ = C_120_HZ
              else (N1, N0, N0, N0, SP, UH, LZ) when I_PWM_FREQ = C_1_KHZ;
 
-end architecture rtl;
+end architecture behavioral;

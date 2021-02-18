@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 -- Filename     : i2c_7sd_driver.vhd
--- Author(s)    : Chris Lloyd
+-- Author(s)    : Chris Lloyd, Camilla Ketola, Josiah Schmidt
 -- Class        : EE316 (Project 2)
 -- Due Date     : 2021-02-23
 -- Target Board : Altera DE2 Devkit
@@ -72,18 +72,18 @@ architecture behavioral of i2c_7sd_driver is
   -- Constants --
   ---------------
   constant C_CLK_FREQ_HZ         : integer := C_CLK_FREQ_MHZ * 1_000_000;
-  constant C_I2C_BUS_CLK_FREQ_HZ : integer := 100_000;  -- CDL=> 100_000 or 400_000?
-  constant C_I2C_7SD_ADDR        : std_logic_vector(6 downto 0) := "1110001";  -- 0x71
+  constant C_I2C_BUS_CLK_FREQ_HZ : integer := 100_000;
+  constant C_I2C_7SD_ADDR        : std_logic_vector(6 downto 0) := "1110001";  -- Default address is 0x71
   constant C_WR_BYTE_INDEX_MAX   : integer := 12;
   constant C_WR_BYTE_READY_INDEX : integer := 7;
 
-  constant C_7SD_CLEAR_DISP_CMD  : std_logic_vector(7 downto 0) := x"76"; -- CDL=> Explain and add more?
+  constant C_7SD_CLEAR_DISP_CMD  : std_logic_vector(7 downto 0) := x"76";
   constant C_7SD_BRIGHTNESS_CMD  : std_logic_vector(7 downto 0) := x"7A";
   constant C_7SD_DEC_CTRL_CMD    : std_logic_vector(7 downto 0) := x"77";
   constant C_7SD_CURS_CTRL_CMD   : std_logic_vector(7 downto 0) := x"79";
 
   -------------
-  -- SIGNALS -- -- CDL=> Comment
+  -- SIGNALS --
   -------------
 
   -- State machine related signals
@@ -96,9 +96,9 @@ architecture behavioral of i2c_7sd_driver is
 
   signal s_wr_data_byte         : std_logic_vector(7 downto 0);
 
-  signal s_7sd_wr        : std_logic;  --'0' is write, '1' is read
-  signal s_7sd_address   : std_logic_vector(6 downto 0) := C_I2C_7SD_ADDR;
-  signal s_7sd_busy      : std_logic;
+  signal s_7sd_wr               : std_logic;  --'0' is write, '1' is read
+  signal s_7sd_address          : std_logic_vector(6 downto 0) := C_I2C_7SD_ADDR;
+  signal s_7sd_busy             : std_logic;
 
 begin
 
@@ -254,13 +254,13 @@ begin
       s_wr_data_byte                  <= C_7SD_CLEAR_DISP_CMD;
     elsif (rising_edge(I_CLK)) then
       case s_wr_data_byte_index is
-        when 0      => s_wr_data_byte <= C_7SD_CLEAR_DISP_CMD;  -- CDL=> Need to clear display 3 times?
+        when 0      => s_wr_data_byte <= C_7SD_CLEAR_DISP_CMD;
         when 1      => s_wr_data_byte <= C_7SD_CLEAR_DISP_CMD;
         when 2      => s_wr_data_byte <= C_7SD_CLEAR_DISP_CMD;
         when 3      => s_wr_data_byte <= C_7SD_BRIGHTNESS_CMD;
-        when 4      => s_wr_data_byte <= x"64";  -- Max brightness  --CDL=> Right value?
+        when 4      => s_wr_data_byte <= x"64";
         when 5      => s_wr_data_byte <= C_7SD_DEC_CTRL_CMD;
-        when 6      => s_wr_data_byte <= x"00";  -- No decimal points  --CDL=> Right value?
+        when 6      => s_wr_data_byte <= x"00";  -- No decimal points
         when 7      => s_wr_data_byte <= C_7SD_CURS_CTRL_CMD;
         when 8      => s_wr_data_byte <= x"00";  -- Reset cursor to digit 0
         when 9      => s_wr_data_byte <= x"0" & s_display_data_latched(15 downto 12);

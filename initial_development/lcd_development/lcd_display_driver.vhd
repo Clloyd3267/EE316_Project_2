@@ -65,7 +65,7 @@ port
   O_LCD_RW         : out std_logic;
   O_LCD_ON         : out std_logic;
 
-  -- CDL=> Not needed for DE2 since backlight is not setup, but included anyways
+  -- CDL=> Not needed for DE2 since backlight hardware is not setup, but included anyways
   O_LCD_BLON       : out std_logic
 );
 end entity lcd_display_driver;
@@ -73,7 +73,7 @@ end entity lcd_display_driver;
 --------------------------------
 --  Architecture Declaration  --
 --------------------------------
-architecture rtl of lcd_display_driver is
+architecture behavioral of lcd_display_driver is
 
   ----------------
   -- Components --
@@ -106,8 +106,8 @@ architecture rtl of lcd_display_driver is
   -- Constants --
   ---------------
   constant C_LCD_INDEX_CNTR_MAX : integer := 33;
+  constant C_LCD_ADDRESS_0X00   : std_logic_vector(6 downto 0) :="0000000";  -- Address 0 (start of line 1)
   constant C_LCD_ADDRESS_0X40   : std_logic_vector(6 downto 0) :="1000000";  -- Address 40 (start of line 2)
-  constant C_LCD_CLR_DISP       : std_logic_vector(6 downto 0) :="0000001";  -- Address 40 (start of line 2)
 
   -------------
   -- SIGNALS --
@@ -312,13 +312,13 @@ begin
 
       -- Data byte logic
       if (s_lcd_index_cntr = 0) then
-			s_lcd_write_byte  <= "1" & "0000000"; -- CDL=> Fix later
-			s_lcd_rs          <= '0';
-		elsif (s_lcd_write_mode = '0') then  -- Data
+			  s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X00; -- Go to first line
+			  s_lcd_rs           <= '0';
+		  elsif (s_lcd_write_mode = '0') then  -- Data
         s_lcd_write_byte   <= s_lcd_data_latched(C_LCD_INDEX_CNTR_MAX - s_lcd_index_cntr);
         s_lcd_rs           <= '1';
       else  -- Address
-        s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X40;  -- Address 40 (start of line 2)
+        s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X40; -- Go to next line
         s_lcd_rs           <= '0';
       end if;
 
@@ -335,4 +335,4 @@ begin
   s_lcd_rw   <= '0';  -- Always writing
   O_LCD_BLON <= '1';  -- Backlight always on
 
-end architecture rtl;
+end architecture behavioral;

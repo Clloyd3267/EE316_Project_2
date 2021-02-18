@@ -29,12 +29,13 @@ library work;
 entity memory_pwm_generator_top is
 port
 (
-  I_CLK_50_MHZ : in std_logic;     -- System clk (50 MHZ)
-  I_RESET_N    : in std_logic;     -- System reset (active low)
+  I_CLK_50_MHZ : in std_logic;     -- System Clk (50 MHZ)
 
-  I_KEY_1_N    : in std_logic;     -- Key inputs used to control the state machine
-  I_KEY_2_N    : in std_logic;     -- Key inputs used to control the state machine
-  I_KEY_3_N    : in std_logic;     -- Key inputs used to control the state machine
+  -- Key inputs used to control the state machine
+  I_KEY_0_N    : in std_logic;
+  I_KEY_1_N    : in std_logic;
+  I_KEY_2_N    : in std_logic;
+  I_KEY_3_N    : in std_logic;
 
   -- I2C passthrough signals
   IO_I2C_SDA   : inout std_logic;  -- Serial data of i2c bus
@@ -191,6 +192,9 @@ architecture behavioral of memory_pwm_generator_top is
   constant C_INC_DEC        : std_logic := '1';   -- Increment/decrement (decrement: '0', increment: '1')
   constant C_SHIFT_EN       : std_logic := '0';   -- Shift enable (shift off: '0', shift on: '1')
 
+  -- 7SD specific commands
+  constant C_7SD_CLEAR_DISP_CMD  : std_logic_vector(7 downto 0) := x"76";
+
   -- Mode of Operation
   -- 00: Initialization
   -- 01: Test
@@ -220,7 +224,7 @@ architecture behavioral of memory_pwm_generator_top is
   constant C_TRIGGER_EDGE   : T_EDGE_TYPE := RISING;  -- Edge to trigger on
 
   -------------
-  -- SIGNALS --
+  -- SIGNALS -- -- CDL=> Line up later
   -------------
 
   signal s_lcd_data        : t_lcd_display_data;             -- Data to be displayed on LCD
@@ -233,13 +237,9 @@ architecture behavioral of memory_pwm_generator_top is
   signal s_prev_mode       : std_logic_vector(1 downto 0);
   signal s_curr_pwm_freq   : std_logic_vector(1 downto 0);
 
-  signal s_curr_address    : std_logic_vector(7 downto 0)  := x"FF";
   signal s_curr_data       : std_logic_vector(15 downto 0) := x"FFFF";
 
-  -- System reset control signal
-  signal s_reset_n              : std_logic := '0';
-
-  -- System reset control signal from counter
+  -- System reset control signal from counter (active low)
   signal s_cntr_reset_n         : std_logic := '0';
 
   -- Signal to toggle (increment/decrement) address
@@ -248,11 +248,14 @@ architecture behavioral of memory_pwm_generator_top is
   -- Current counter address
   signal s_current_address      : unsigned(17 downto 0) := (others=>'0');
 
+  -- Stable button inputs
   signal s_key_0_debounced : std_logic;
   signal s_key_1_debounced : std_logic;
   signal s_key_2_debounced : std_logic;
   signal s_key_3_debounced : std_logic;
 
+  -- Pulsed triggers indicating when a key was pressed
+  signal s_key_0           : std_logic;
   signal s_key_1           : std_logic;
   signal s_key_2           : std_logic;
   signal s_key_3           : std_logic;
@@ -275,7 +278,7 @@ begin
   port map
   (
     I_CLK            => I_CLK_50_MHZ,
-    I_RESET_N        => s_reset_n,
+    I_RESET_N        => s_cntr_reset_n,
     I_LCD_DATA       => s_lcd_data,
     O_LCD_BUSY       => s_lcd_busy,
     O_LCD_ON         => O_LCD_ON,
@@ -295,11 +298,11 @@ begin
   port map
   (
     I_CLK          => I_CLK_50_MHZ,
-    I_RESET_N      => s_reset_n,
-    I_MODE         => s_curr_mode, -- s_curr_mode / C_PAUSE_MODE
+    I_RESET_N      => s_cntr_reset_n,
+    I_MODE         => s_curr_mode,
     I_PWM_FREQ     => s_curr_pwm_freq,
     I_DATA         => s_curr_data,
-    I_ADDRESS      => s_curr_address,
+    I_ADDRESS      => s_current_address,
     O_LCD_DATA     => s_lcd_lut_data
   );
 
@@ -312,7 +315,7 @@ begin
   port map
   (
     I_CLK          => I_CLK_50_MHZ,
-    I_RESET_N      => s_reset_n,
+    I_RESET_N      => s_cntr_reset_n,
 
     I_DISPLAY_DATA => s_curr_data,
     O_BUSY         => s_i2c_busy,
@@ -320,7 +323,8 @@ begin
     IO_I2C_SCL     => IO_I2C_SCL
   );
 
-  KEY0_DEBOUNCE_INST: debounce_button -------------------------------------
+  -- Debounce modules for KEY0-KEY3
+  KEY0_DEBOUNCE_INST: debounce_button
   generic map
   (
     C_CLK_FREQ_MHZ   => C_CLK_FREQ_MHZ,
@@ -329,8 +333,8 @@ begin
   port map
   (
     I_CLK            => I_CLK_50_MHZ,
-    I_RESET_N        => s_reset_n,
-    I_BUTTON         => not I_RESET_N,
+    I_RESET_N        => s_cntr_reset_n,
+    I_BUTTON         => not I_KEY_0_N,
     O_BUTTON         => s_key_0_debounced
   );
 
@@ -343,7 +347,7 @@ begin
   port map
   (
     I_CLK            => I_CLK_50_MHZ,
-    I_RESET_N        => s_reset_n,
+    I_RESET_N        => s_cntr_reset_n,
     I_BUTTON         => not I_KEY_1_N,
     O_BUTTON         => s_key_1_debounced
   );
@@ -357,7 +361,7 @@ begin
   port map
   (
     I_CLK            => I_CLK_50_MHZ,
-    I_RESET_N        => s_reset_n,
+    I_RESET_N        => s_cntr_reset_n,
     I_BUTTON         => not I_KEY_2_N,
     O_BUTTON         => s_key_2_debounced
   );
@@ -371,9 +375,24 @@ begin
   port map
   (
     I_CLK            => I_CLK_50_MHZ,
-    I_RESET_N        => s_reset_n,
+    I_RESET_N        => s_cntr_reset_n,
     I_BUTTON         => not I_KEY_3_N,
     O_BUTTON         => s_key_3_debounced
+  );
+
+  -- Edge detection modules for KEY0-KEY3
+  KEY0_EDGE_DETEC_INST: edge_detector
+  generic map
+  (
+    C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ,
+    C_TRIGGER_EDGE => C_TRIGGER_EDGE
+  )
+  port map
+  (
+    I_CLK          => I_CLK_50_MHZ,
+    I_RESET_N      => s_cntr_reset_n,
+    I_SIGNAL       => s_key_0_debounced,
+    O_EDGE_SIGNAL  => s_key_0
   );
 
   KEY1_EDGE_DETEC_INST: edge_detector
@@ -385,7 +404,7 @@ begin
   port map
   (
     I_CLK          => I_CLK_50_MHZ,
-    I_RESET_N      => s_reset_n,
+    I_RESET_N      => s_cntr_reset_n,
     I_SIGNAL       => s_key_1_debounced,
     O_EDGE_SIGNAL  => s_key_1
   );
@@ -399,7 +418,7 @@ begin
   port map
   (
     I_CLK          => I_CLK_50_MHZ,
-    I_RESET_N      => s_reset_n,
+    I_RESET_N      => s_cntr_reset_n,
     I_SIGNAL       => s_key_2_debounced,
     O_EDGE_SIGNAL  => s_key_2
   );
@@ -413,10 +432,11 @@ begin
   port map
   (
     I_CLK          => I_CLK_50_MHZ,
-    I_RESET_N      => s_reset_n,
+    I_RESET_N      => s_cntr_reset_n,
     I_SIGNAL       => s_key_3_debounced,
     O_EDGE_SIGNAL  => s_key_3
   );
+
   ---------------
   -- Processes --
   ---------------
@@ -447,17 +467,17 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_TOGGLE_COUNTER
   -- Sensitivity List : I_CLK_50_MHZ     : System clock
-  --                    s_reset_n        : System reset (active low logic)
+  --                    s_cntr_reset_n        : System reset (active low logic)
   -- Useful Outputs   : s_address_toggle : Pulsed signal to toggle address
   -- Description      : Counter to delay changing address at a rate of either
   --                    255Hz (INIT_STATE) or 1Hz (OP_STATE). -- CDL=> Add/Fix freqs
   ------------------------------------------------------------------------------
-  ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, s_reset_n)
+  ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, s_cntr_reset_n)
     constant C_1HZ_MAX_COUNT       : integer := C_CLK_FREQ_MHZ * 1000000;  -- 1 Hz
     constant C_255HZ_MAX_COUNT     : integer := C_CLK_FREQ_MHZ * 4000;     -- 255 Hz
     variable v_address_toggle_cntr : integer range 0 TO C_1HZ_MAX_COUNT := 0;
   begin
-    if (s_reset_n = '0') then
+    if (s_cntr_reset_n = '0') then
       v_address_toggle_cntr     :=  0;
       s_address_toggle          <= '0';
 
@@ -483,22 +503,27 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_INDEX_COUNTER
   -- Sensitivity List : I_CLK_50_MHZ      : System clock
-  --                    s_reset_n         : System reset (active low logic)
+  --                    s_cntr_reset_n         : System reset (active low logic)
   -- Useful Outputs   : s_current_address : Current address of counter
   -- Description      : A process to increment address depending on mode. -- CDL=> here
   ------------------------------------------------------------------------------
-  ADDRESS_INDEX_COUNTER: process (I_CLK_50_MHZ, s_reset_n)
+  ADDRESS_INDEX_COUNTER: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
-    if (s_reset_n = '0') then
-      s_current_address   <= (others=>'1');
+    if (s_cntr_reset_n = '0') then
+      s_current_address     <= (others=>'1');
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
 
       -- Increment address when toggle signal occurs
-      if (s_address_toggle = '1') and (s_current_address(7 downto 0) = C_MAX_ADDRESS) then
-        s_current_address <= (others=>'0');
+      if (s_address_toggle = '1') and
+         ((s_curr_mode = C_TEST_MODE) or (s_curr_mode = C_PAUSE_MODE)) then
+        if (s_current_address(7 downto 0) = C_MAX_ADDRESS) then
+          s_current_address <= (others=>'0');
+        else
+          s_current_address <= s_current_address + 1;
+        end if;
       else
-        s_current_address <= s_current_address + 1;
+        s_current_address   <= s_current_address;
       end if;
     end if;
   end process ADDRESS_INDEX_COUNTER;
@@ -507,30 +532,34 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : MODE_STATE_MACHINE
   -- Sensitivity List : I_CLK_50_MHZ : System clock
-  --                    s_reset_n    : System reset (active low logic)
+  --                    s_cntr_reset_n    : System reset (active low logic)
   -- Useful Outputs   : s_curr_mode  : Current mode of the system
   --                    s_prev_mode  : Mode of system last clock edge
   -- Description      : State machine to control different modes for
   --                    initialization, and operation of system. -- CDL=> Redo logic -- Explain states
   ------------------------------------------------------------------------------
-  MODE_STATE_MACHINE: process (I_CLK_50_MHZ, s_reset_n)
+  MODE_STATE_MACHINE: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
-    if (s_reset_n = '0') then
+    if (s_cntr_reset_n = '0') then
       s_curr_mode <= C_INIT_MODE;
       s_prev_mode <= C_INIT_MODE;
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
 
+      -- System Init
+      if (s_key_0 = '1') then
+        s_curr_mode   <= C_INIT_MODE;
+
       -- Initialization mode
-      if (s_curr_mode = C_INIT_MODE) then
-        -- Wait for ROM data to be loaded into SRAM
---        if (s_current_address = C_MAX_ADDRESS) and
---           (s_address_toggle = '1') then
---          s_curr_mode <= C_TEST_MODE;
---        else
---          s_curr_mode <= s_curr_mode;
---        end if;
-		  s_curr_mode <= C_TEST_MODE;
+      elsif (s_curr_mode = C_INIT_MODE) then -- CDL=> Add check for key held
+       -- Wait for ROM data to be loaded into SRAM
+       if (s_current_address = C_MAX_ADDRESS) and
+          (s_address_toggle = '1') then
+         s_curr_mode <= C_TEST_MODE;
+       else
+         s_curr_mode <= s_curr_mode;
+       end if;
+      -- s_curr_mode <= C_TEST_MODE; -- CDL=> For testing
 
       -- Test mode
       elsif (s_curr_mode = C_TEST_MODE) then
@@ -573,14 +602,14 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : FREQ_STATE_MACHINE
-  -- Sensitivity List : I_CLK_50_MHZ : System clock
-  --                    s_reset_n    : System reset (active low logic)
-  -- Useful Outputs   : s_curr_mode  : Current freq of the system
+  -- Sensitivity List : I_CLK_50_MHZ      : System clock
+  --                    s_cntr_reset_n    : System reset (active low logic)
+  -- Useful Outputs   : s_curr_pwm_freq   : Current freq of the system
   -- Description      : State machine to control different freqencies of system.
   ------------------------------------------------------------------------------
-  FREQ_STATE_MACHINE: process (I_CLK_50_MHZ, s_reset_n)
+  FREQ_STATE_MACHINE: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
-    if (s_reset_n = '0') then
+    if (s_cntr_reset_n = '0') then
       s_curr_pwm_freq         <= C_60_HZ;
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
@@ -605,21 +634,40 @@ begin
     end if;
   end process FREQ_STATE_MACHINE;
   ------------------------------------------------------------------------------
-  
-  process (I_CLK_50_MHZ, s_reset_n) -- CDl=> Here
+
+  ------------------------------------------------------------------------------
+  -- Process Name     : DISPLAY_DATA_CTRL
+  -- Sensitivity List : I_CLK_50_MHZ      : System clock
+  --                    s_cntr_reset_n    : System reset (active low logic)
+  -- Useful Outputs   :
+  -- Description      : Process to control what data each display is displaying.
+  ------------------------------------------------------------------------------
+  DISPLAY_DATA_CTRL: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
-    if (s_reset_n = '0') then
+    if (s_cntr_reset_n = '0') then
+      s_curr_data    <= x"0000";
+
+    elsif (rising_edge(I_CLK_50_MHZ)) then
+      if (s_curr_mode = C_TEST_MODE) or (s_curr_mode = C_PAUSE_MODE) then
+        s_curr_data  <= x"3120"; -- CDL=> Rom data later
+      else
+        s_curr_data  <= C_7SD_CLEAR_DISP_CMD;
+      end if;
+    end if;
+  end process DISPLAY_DATA_CTRL;
+  ------------------------------------------------------------------------------
+
+  process (I_CLK_50_MHZ, s_cntr_reset_n) -- CDl=> Here
+  begin
+    if (s_cntr_reset_n = '0') then
       s_lcd_data <= (others=>(others=>'0'));
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
-		if (s_lcd_busy = '0') then
-			s_lcd_data <= s_lcd_lut_data;
-		end if;
+    if (s_lcd_busy = '0') then
+      s_lcd_data <= s_lcd_lut_data;
+    end if;
     end if;
   end process;
-  ------------------------------------------------------------------------------  
-  
-  -- Reset system (low) when counter reset signal is low or system reset is low
-  s_reset_n <= s_cntr_reset_n and (not s_key_0_debounced);
+  ------------------------------------------------------------------------------
 
 end architecture behavioral;
