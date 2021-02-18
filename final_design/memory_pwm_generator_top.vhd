@@ -175,7 +175,65 @@ architecture behavioral of memory_pwm_generator_top is
   );
   end component edge_detector;
 
-  -- CDL=> Add SRAM and ROM
+  -- component sram_control is
+  -- port
+  -- (
+  --   clk      : in std_logic;  --clock
+  --   rst      : in std_logic;  --reset button
+  --   en       : in std_logic;  --enable
+  --   rw       : in std_logic;   --the read/write signal
+  --   ce       : out std_logic;  --chip enable
+  --   we       : out std_logic;  --write enable
+  --   oe       : out std_logic;  --output enable
+  --   ub       : out std_logic;  --upper bit output
+  --   lb       : out std_logic;   --lower but output
+  --   datain   : in std_logic_vector(15 downto 0);  -- sram input data
+  --   dataout  : out std_logic_vector(15 downto 0);  --sram output data
+  --   dataio   : inout std_logic_vector(15 downto 0);  --sram i/o
+  --   addr_in  : in std_logic_vector(17 downto 0);  --sram address input
+  --   addr_out : out std_logic_vector(17 downto 0)
+  -- );
+  -- end component sram_control;
+
+  component sram_driver is
+  generic
+  (
+    C_CLK_FREQ_MHZ    : integer       -- System clock frequency in MHz
+  );
+  port
+  (
+    I_CLK             : in std_logic; -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N         : in std_logic; -- System reset (active low)
+
+    I_SRAM_ENABLE     : in std_logic;
+    I_COMMAND_TRIGGER : in std_logic;
+    I_RW              : in std_logic;
+    I_ADDRESS         : in std_logic_vector(17 downto 0);
+    I_DATA            : in std_logic_vector(15 downto 0);
+    O_BUSY            : out std_logic;
+    O_DATA            : out std_logic_vector(15 downto 0);
+
+    -- Low level pass through signals
+    IO_SRAM_DATA      : inout std_logic_vector(15 downto 0);
+    O_SRAM_ADDR       : out std_logic_vector(17 downto 0);
+    O_SRAM_WE_N       : out std_logic;
+    O_SRAM_OE_N       : out std_logic;
+    O_SRAM_UB_N       : out std_logic;
+    O_SRAM_LB_N       : out std_logic;
+    O_SRAM_CE_N       : out std_logic
+  );
+  end component sram_driver;
+
+  component rom_driver is
+  port
+  (
+    address : in std_logic_vector(7 downto 0);
+    clock   : in std_logic;
+    q       : out std_logic_vector(15 downto 0)
+  );
+  end component rom_driver;
+
+  -- CDL=> Add PWM
 
   ---------------
   -- Constants --
@@ -260,6 +318,17 @@ architecture behavioral of memory_pwm_generator_top is
   signal s_key_2           : std_logic;
   signal s_key_3           : std_logic;
 
+  -- Data from ROM memory
+  signal s_rom_data_bits        : std_logic_vector(15 downto 0);
+
+  -- Signals to use for SRAM
+  signal s_sram_enable          : std_logic;
+  signal s_sram_trigger         : std_logic;
+  signal s_sram_trigger_1       : std_logic;  -- Delay to fix OBO error
+  signal s_sram_rw              : std_logic;
+  signal s_sram_busy            : std_logic;
+  signal s_sram_read_data       : std_logic_vector(15 downto 0);
+
 begin
 
   -- User logic display driver for LCD
@@ -302,7 +371,7 @@ begin
     I_MODE         => s_curr_mode,
     I_PWM_FREQ     => s_curr_pwm_freq,
     I_DATA         => s_curr_data,
-    I_ADDRESS      => s_current_address,
+    I_ADDRESS      => std_logic_vector(s_current_address)(7 downto 0),
     O_LCD_DATA     => s_lcd_lut_data
   );
 
@@ -317,7 +386,7 @@ begin
     I_CLK          => I_CLK_50_MHZ,
     I_RESET_N      => s_cntr_reset_n,
 
-    I_DISPLAY_DATA => s_curr_data,
+    I_DISPLAY_DATA => s_sram_read_data,
     O_BUSY         => s_i2c_busy,
     IO_I2C_SDA     => IO_I2C_SDA,
     IO_I2C_SCL     => IO_I2C_SCL
@@ -437,6 +506,43 @@ begin
     O_EDGE_SIGNAL  => s_key_3
   );
 
+  -- SRAM controller to store and recall data from SRAM
+  SRAM_CONTROLLER_INST: sram_driver
+  generic map
+  (
+    C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
+  )
+  port map
+  (
+    I_CLK             => I_CLK_50_MHZ,
+    I_RESET_N         => s_cntr_reset_n,
+    I_SRAM_ENABLE     => s_sram_enable,
+    I_COMMAND_TRIGGER => s_sram_trigger_1,
+    I_RW              => s_sram_rw,
+    I_ADDRESS         => std_logic_vector(s_current_address),
+    I_DATA            => s_rom_data_bits,
+    O_BUSY            => s_sram_busy,
+    O_DATA            => s_sram_read_data,
+    IO_SRAM_DATA      => IO_SRAM_DATA,
+    O_SRAM_ADDR       => O_SRAM_ADDR,
+    O_SRAM_WE_N       => O_SRAM_WE_N,
+    O_SRAM_OE_N       => O_SRAM_OE_N,
+    O_SRAM_UB_N       => O_SRAM_UB_N,
+    O_SRAM_LB_N       => O_SRAM_LB_N,
+    O_SRAM_CE_N       => O_SRAM_CE_N
+  );
+
+  -- Rom controller to get data from read only memory
+  ROM_CONTROLLER_INST: rom_driver
+  port map
+  (
+    address           => std_logic_vector(s_current_address)(7 downto 0),
+    clock             => I_CLK_50_MHZ,
+    q                 => s_rom_data_bits
+  );
+
+  -- CDL=> Rearrange and add PWM module port map
+
   ---------------
   -- Processes --
   ---------------
@@ -467,15 +573,22 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_TOGGLE_COUNTER
   -- Sensitivity List : I_CLK_50_MHZ     : System clock
-  --                    s_cntr_reset_n        : System reset (active low logic)
+  --                    s_cntr_reset_n   : System reset (active low logic)
   -- Useful Outputs   : s_address_toggle : Pulsed signal to toggle address
-  -- Description      : Counter to delay changing address at a rate of either
-  --                    255Hz (INIT_STATE) or 1Hz (OP_STATE). -- CDL=> Add/Fix freqs
+  -- Description      : Counter to delay incrementing address.
   ------------------------------------------------------------------------------
   ADDRESS_TOGGLE_COUNTER: process (I_CLK_50_MHZ, s_cntr_reset_n)
-    constant C_1HZ_MAX_COUNT       : integer := C_CLK_FREQ_MHZ * 1000000;  -- 1 Hz
-    constant C_255HZ_MAX_COUNT     : integer := C_CLK_FREQ_MHZ * 4000;     -- 255 Hz
-    variable v_address_toggle_cntr : integer range 0 TO C_1HZ_MAX_COUNT := 0;
+    constant C_1_HZ_MAX_COUNT        : integer := C_CLK_FREQ_MHZ * 1000000;  -- 1 Hz
+    constant C_255_HZ_MAX_COUNT      : integer := C_CLK_FREQ_MHZ * 4000;     -- 255 Hz
+
+    -- 50 MHz * 1 / (60 Hz) / 256 = 50 * 65.104
+    -- 50 MHz * 1 / (120 Hz) / 256 = 50 * 32.552
+    -- 50 MHz * 1 / (1000 Hz) / 256 = 50 * 3.906
+    constant C_SINE_60_HZ_MAX_COUNT  : integer := C_CLK_FREQ_MHZ * 65;     -- For all 256 samples: 60 Hz
+    constant C_SINE_120_HZ_MAX_COUNT : integer := C_CLK_FREQ_MHZ * 33;     -- For all 256 samples: 120 Hz
+    constant C_SINE_1_KHZ_MAX_COUNT  : integer := C_CLK_FREQ_MHZ * 4;      -- For all 256 samples: 1000 Hz
+
+    variable v_address_toggle_cntr   : integer range 0 to C_1_HZ_MAX_COUNT := 0;
   begin
     if (s_cntr_reset_n = '0') then
       v_address_toggle_cntr     :=  0;
@@ -483,18 +596,34 @@ begin
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
 
-      -- Address index output logic (Create toggle pulse on max count)
-      if (s_curr_mode = C_INIT_MODE and v_address_toggle_cntr = C_255HZ_MAX_COUNT) then
-        s_address_toggle      <= '1';
-      else
-        s_address_toggle      <= '0';
-      end if;
+      -- Entering init mode
+      if (s_curr_mode /= s_prev_mode) and
+         (s_curr_mode = C_INIT_MODE) then
+          v_address_toggle_cntr := 0;
+          s_address_toggle      <= '0';
 
-      -- Counter and rollover logic
-      if (s_curr_mode = C_INIT_MODE and v_address_toggle_cntr = C_255HZ_MAX_COUNT) then
-        v_address_toggle_cntr := 0;
+      -- In pause mode
+      elsif (s_curr_mode = C_PAUSE_MODE) then
+        v_address_toggle_cntr   := 0;
+        s_address_toggle        <= '0';
+
+      -- Address index output logic (Create toggle pulse on max count)
+      elsif (((s_curr_mode = C_INIT_MODE) and (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
+
+             ((s_curr_mode = C_TEST_MODE) and (v_address_toggle_cntr = C_1_HZ_MAX_COUNT)) or
+
+             ((s_curr_mode = C_PWM_MODE) and
+             (((s_curr_pwm_freq = C_60_HZ) and
+              (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
+              ((s_curr_pwm_freq = C_120_HZ) and
+              (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
+              ((s_curr_pwm_freq = C_1_KHZ) and
+              (v_address_toggle_cntr = C_255_HZ_MAX_COUNT))))) then
+        v_address_toggle_cntr   := 0;
+        s_address_toggle        <= '1';
       else
-        v_address_toggle_cntr := v_address_toggle_cntr + 1;
+        v_address_toggle_cntr   := v_address_toggle_cntr + 1;
+        s_address_toggle        <= '0';
       end if;
     end if;
   end process ADDRESS_TOGGLE_COUNTER;
@@ -503,9 +632,9 @@ begin
   ------------------------------------------------------------------------------
   -- Process Name     : ADDRESS_INDEX_COUNTER
   -- Sensitivity List : I_CLK_50_MHZ      : System clock
-  --                    s_cntr_reset_n         : System reset (active low logic)
+  --                    s_cntr_reset_n    : System reset (active low logic)
   -- Useful Outputs   : s_current_address : Current address of counter
-  -- Description      : A process to increment address depending on mode. -- CDL=> here
+  -- Description      : A process to increment address depending on mode.
   ------------------------------------------------------------------------------
   ADDRESS_INDEX_COUNTER: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
@@ -514,9 +643,16 @@ begin
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
 
-      -- Increment address when toggle signal occurs
-      if (s_address_toggle = '1') and
-         ((s_curr_mode = C_TEST_MODE) or (s_curr_mode = C_PAUSE_MODE)) then
+      -- Entering init mode
+      if (s_curr_mode /= s_prev_mode) and
+         (s_curr_mode = C_INIT_MODE) then
+        s_current_address   <= (others=>'1');
+
+      -- CDL=> PWM -> Test mode?
+
+      -- Increment address when toggle signal occurs and not in pause mode
+      elsif ((s_address_toggle = '1') and
+             (s_curr_mode /= C_PAUSE_MODE)) then
         if (s_current_address(7 downto 0) = C_MAX_ADDRESS) then
           s_current_address <= (others=>'0');
         else
@@ -531,12 +667,12 @@ begin
 
   ------------------------------------------------------------------------------
   -- Process Name     : MODE_STATE_MACHINE
-  -- Sensitivity List : I_CLK_50_MHZ : System clock
-  --                    s_cntr_reset_n    : System reset (active low logic)
-  -- Useful Outputs   : s_curr_mode  : Current mode of the system
-  --                    s_prev_mode  : Mode of system last clock edge
+  -- Sensitivity List : I_CLK_50_MHZ   : System clock
+  --                    s_cntr_reset_n : System reset (active low logic)
+  -- Useful Outputs   : s_curr_mode    : Current mode of the system
+  --                    s_prev_mode    : Mode of system last clock edge
   -- Description      : State machine to control different modes for
-  --                    initialization, and operation of system. -- CDL=> Redo logic -- Explain states
+  --                    initialization, and operation of system.
   ------------------------------------------------------------------------------
   MODE_STATE_MACHINE: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
@@ -559,7 +695,6 @@ begin
        else
          s_curr_mode <= s_curr_mode;
        end if;
-      -- s_curr_mode <= C_TEST_MODE; -- CDL=> For testing
 
       -- Test mode
       elsif (s_curr_mode = C_TEST_MODE) then
@@ -613,6 +748,8 @@ begin
       s_curr_pwm_freq         <= C_60_HZ;
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
+
+      -- If key3 is pressed and in PWM mode, change freq
       if (s_curr_mode = C_PWM_MODE) then
         if (s_key_3 = '1') then
           case (s_curr_pwm_freq) is
@@ -636,11 +773,57 @@ begin
   ------------------------------------------------------------------------------
 
   ------------------------------------------------------------------------------
+  -- Process Name     : SRAM_CONTROL
+  -- Sensitivity List : I_CLK_50_MHZ     : System clock
+  --                    s_cntr_reset_n   : System reset (active low logic)
+  -- Useful Outputs   : s_sram_enable    : Enable signal for SRAM system
+  --                    s_sram_rw        : SRAM read write control
+  --                    s_sram_trigger   : SRAM trigger
+  --                    s_sram_trigger_1 : SRAM trigger (delayed by 1 clk)
+  -- Description      : A process to control the SRAM module depending
+  --                    on current mode.
+  ------------------------------------------------------------------------------
+  SRAM_CONTROL: process (I_CLK_50_MHZ, s_cntr_reset_n)
+  begin
+    if (s_cntr_reset_n = '0') then
+      s_sram_enable             <= '0';
+      s_sram_rw                 <= '0';
+      s_sram_trigger            <= '0';
+      s_sram_trigger_1          <= '0';
+
+    elsif (rising_edge(I_CLK_50_MHZ)) then
+
+      -- Enable (turn on) the sram
+      s_sram_enable             <= '1';
+
+      -- Control SRAM read/write signal
+      if (s_curr_mode = C_INIT_MODE) then
+        s_sram_rw               <= '0';
+      else
+        s_sram_rw               <= '1';
+      end if;
+
+      -- Control SRAM command trigger
+      if (s_curr_mode /= C_PAUSE_MODE) and
+         (s_address_toggle = '1') then
+        s_sram_trigger          <= '1';
+      else
+        s_sram_trigger          <= '0';
+      end if;
+
+      -- Delay SRAM trigger N clock cycles
+      s_sram_trigger_1          <= s_sram_trigger;
+
+    end if;
+  end process SRAM_CONTROL;
+  ------------------------------------------------------------------------------
+
+  ------------------------------------------------------------------------------
   -- Process Name     : DISPLAY_DATA_CTRL
   -- Sensitivity List : I_CLK_50_MHZ      : System clock
   --                    s_cntr_reset_n    : System reset (active low logic)
   -- Useful Outputs   :
-  -- Description      : Process to control what data each display is displaying.
+  -- Description      : Process to control what data each display is displaying. -- CDL=> Needed/clean up later?
   ------------------------------------------------------------------------------
   DISPLAY_DATA_CTRL: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
@@ -648,26 +831,18 @@ begin
       s_curr_data    <= x"0000";
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
+      if (s_lcd_busy = '0') then
+        s_lcd_data <= s_lcd_lut_data;
+      end if;
+
       if (s_curr_mode = C_TEST_MODE) or (s_curr_mode = C_PAUSE_MODE) then
-        s_curr_data  <= x"3120"; -- CDL=> Rom data later
+        s_curr_data  <= s_sram_read_data;
       else
-        s_curr_data  <= C_7SD_CLEAR_DISP_CMD;
+        s_curr_data  <= s_sram_read_data;
+        -- s_curr_data  <= x"00" & std_logic_vector(s_current_address)(7 downto 0);
       end if;
     end if;
   end process DISPLAY_DATA_CTRL;
-  ------------------------------------------------------------------------------
-
-  process (I_CLK_50_MHZ, s_cntr_reset_n) -- CDl=> Here
-  begin
-    if (s_cntr_reset_n = '0') then
-      s_lcd_data <= (others=>(others=>'0'));
-
-    elsif (rising_edge(I_CLK_50_MHZ)) then
-    if (s_lcd_busy = '0') then
-      s_lcd_data <= s_lcd_lut_data;
-    end if;
-    end if;
-  end process;
   ------------------------------------------------------------------------------
 
 end architecture behavioral;

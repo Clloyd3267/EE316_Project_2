@@ -178,7 +178,7 @@ begin
       O_LCD_DATA     <= (others=>(others=>('0')));
 
     elsif (rising_edge(I_CLK)) then
-      case(I_MODE) is
+      case(I_MODE) is -- CDL=> Fix Index/explain
         when C_MODE_INIT  =>
           -- [..Initializing..]
           -- [................]
@@ -205,7 +205,9 @@ begin
           O_LCD_DATA <=
           (
             SP, SP, UP, LA, LU, LS, LE, SP, UM, LO, LD, LE, SP, SP, SP, SP,
-            SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP, SP
+            SP, N0, LX, s_addr_ascii(1), s_addr_ascii(0), SP, CL, SP, N0, LX,
+            s_data_ascii(3), s_data_ascii(2), s_data_ascii(1), s_data_ascii(0),
+            SP, SP
           );
 
         when C_MODE_PWM   =>
