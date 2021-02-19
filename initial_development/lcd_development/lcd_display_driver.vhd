@@ -105,7 +105,7 @@ architecture behavioral of lcd_display_driver is
   ---------------
   -- Constants --
   ---------------
-  constant C_LCD_INDEX_CNTR_MAX : integer := 33;
+  constant C_LCD_INDEX_CNTR_MAX : integer := 32;
   constant C_LCD_ADDRESS_0X00   : std_logic_vector(6 downto 0) :="0000000";  -- Address 0 (start of line 1)
   constant C_LCD_ADDRESS_0X40   : std_logic_vector(6 downto 0) :="1000000";  -- Address 40 (start of line 2)
 
@@ -288,7 +288,8 @@ begin
 
       -- Data or Address selection logic
       if (s_lcd_curr_state = NEXT_STATE) and (s_lcd_busy = '0') then
-        if ((s_lcd_index_cntr = 17) and (s_lcd_write_mode = '0')) then
+        if (((s_lcd_index_cntr = 16) and (s_lcd_write_mode = '0')) or
+            ((s_lcd_index_cntr = 0)  and (s_lcd_write_mode = '0'))) then
           s_lcd_write_mode <= '1';
         else
           s_lcd_write_mode <= '0';
@@ -299,7 +300,8 @@ begin
 
       -- Data Byte Index logic
       if (s_lcd_curr_state = NEXT_STATE) and (s_lcd_busy = '0') then
-        if ((s_lcd_index_cntr = 17) and (s_lcd_write_mode = '0')) then
+        if (((s_lcd_index_cntr = 16) and (s_lcd_write_mode = '0')) or
+            ((s_lcd_index_cntr = 0)  and (s_lcd_write_mode = '0'))) then
           s_lcd_index_cntr <= s_lcd_index_cntr;
         elsif (s_lcd_index_cntr /= C_LCD_INDEX_CNTR_MAX) then
           s_lcd_index_cntr <= s_lcd_index_cntr + 1;
@@ -311,15 +313,17 @@ begin
       end if;
 
       -- Data byte logic
-      if (s_lcd_index_cntr = 0) then
-			  s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X00; -- Go to first line
-			  s_lcd_rs           <= '0';
-		  elsif (s_lcd_write_mode = '0') then  -- Data
+      if (s_lcd_write_mode = '0') then  -- Data
         s_lcd_write_byte   <= s_lcd_data_latched(C_LCD_INDEX_CNTR_MAX - s_lcd_index_cntr);
         s_lcd_rs           <= '1';
-      else  -- Address
-        s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X40; -- Go to next line
-        s_lcd_rs           <= '0';
+      else                              -- Address
+        if (s_lcd_index_cntr = 16) then
+          s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X40; -- Go to next line
+          s_lcd_rs           <= '0';
+        else
+          s_lcd_write_byte   <= "1" & C_LCD_ADDRESS_0X00; -- Go to first line
+          s_lcd_rs           <= '0';
+        end if;
       end if;
 
       -- Output Busy logic

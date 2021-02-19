@@ -196,7 +196,7 @@ begin
   DATA_FLOW_CTRL: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_display_data_latched     <= (others=>'0');
+      s_display_data_latched     <= (others=>'1');
       s_7sd_enable               <= '0';
       s_wr_data_byte_index       <=  0;
       O_BUSY                     <= '1';

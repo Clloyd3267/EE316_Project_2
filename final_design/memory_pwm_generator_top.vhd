@@ -5,21 +5,24 @@
 -- Due Date     : 2021-02-23
 -- Target Board : Altera DE2 Devkit
 -- Entity       : memory_pwm_generator_top
--- Description  : Multi Mode memory control system which loads default data from
---                ROM and stores it in SRAM. This data is then used to generate
---                a Pulse Width Modulation (PWM) sine wave at a certain frequency.
+-- Description  : Multi Mode memory control system, which loads default data
+--                from ROM and stores it in SRAM. This data is then used to
+--                generate a Pulse Width Modulation (PWM) sine wave at a
+--                certain frequency. (60Hz, 120Hz, 1kHz)
 --------------------------------------------------------------------------------
 
 -----------------
---  Libraries  --  -- Label purpose of utils
+--  Libraries  --
 -----------------
 library ieee;
   use ieee.std_logic_1164.all;
   use ieee.numeric_std.all;
 
+-- Used for LCD "screen" array type
 library work;
   use work.lcd_screen_util.all;
 
+-- Used for pushbutton edge type
 library work;
   use work.edge_detector_utilities.all;
 
@@ -145,57 +148,7 @@ architecture behavioral of memory_pwm_generator_top is
   );
   end component lcd_lut;
 
-  component debounce_button is
-  generic
-  (
-    C_CLK_FREQ_MHZ   : integer;       -- System clock frequency in MHz
-    C_STABLE_TIME_MS : integer        -- Time required for button to remain stable in ms
-  );
-  port
-  (
-    I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
-    I_RESET_N        : in std_logic;  -- System reset (active low)
-    I_BUTTON         : in std_logic;  -- Button data to be debounced
-    O_BUTTON         : out std_logic  -- Debounced button data
-  );
-  end component debounce_button;
-
-  component edge_detector is
-  generic
-  (
-    C_CLK_FREQ_MHZ   : integer;       -- System clock frequency in MHz
-    C_TRIGGER_EDGE   : T_EDGE_TYPE    -- Edge to trigger on
-  );
-  port
-  (
-    I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
-    I_RESET_N        : in std_logic;  -- System reset (active low)
-    I_SIGNAL         : in std_logic;  -- Input signal to pass through edge detector
-    O_EDGE_SIGNAL    : out std_logic  -- Output pulse on (C_TRIGGER_EDGE) edge
-  );
-  end component edge_detector;
-
-  -- component sram_control is
-  -- port
-  -- (
-  --   clk      : in std_logic;  --clock
-  --   rst      : in std_logic;  --reset button
-  --   en       : in std_logic;  --enable
-  --   rw       : in std_logic;   --the read/write signal
-  --   ce       : out std_logic;  --chip enable
-  --   we       : out std_logic;  --write enable
-  --   oe       : out std_logic;  --output enable
-  --   ub       : out std_logic;  --upper bit output
-  --   lb       : out std_logic;   --lower but output
-  --   datain   : in std_logic_vector(15 downto 0);  -- sram input data
-  --   dataout  : out std_logic_vector(15 downto 0);  --sram output data
-  --   dataio   : inout std_logic_vector(15 downto 0);  --sram i/o
-  --   addr_in  : in std_logic_vector(17 downto 0);  --sram address input
-  --   addr_out : out std_logic_vector(17 downto 0)
-  -- );
-  -- end component sram_control;
-
-  component sram_driver is
+  component sram_driver is  -- CDL=> Consider swapping SRAM module later
   generic
   (
     C_CLK_FREQ_MHZ    : integer       -- System clock frequency in MHz
@@ -233,7 +186,37 @@ architecture behavioral of memory_pwm_generator_top is
   );
   end component rom_driver;
 
-  -- CDL=> Add PWM
+  -- CDL=> Add PWM module
+
+  component debounce_button is
+  generic
+  (
+    C_CLK_FREQ_MHZ   : integer;       -- System clock frequency in MHz
+    C_STABLE_TIME_MS : integer        -- Time required for button to remain stable in ms
+  );
+  port
+  (
+    I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N        : in std_logic;  -- System reset (active low)
+    I_BUTTON         : in std_logic;  -- Button data to be debounced
+    O_BUTTON         : out std_logic  -- Debounced button data
+  );
+  end component debounce_button;
+
+  component edge_detector is
+  generic
+  (
+    C_CLK_FREQ_MHZ   : integer;       -- System clock frequency in MHz
+    C_TRIGGER_EDGE   : T_EDGE_TYPE    -- Edge to trigger on
+  );
+  port
+  (
+    I_CLK            : in std_logic;  -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N        : in std_logic;  -- System reset (active low)
+    I_SIGNAL         : in std_logic;  -- Input signal to pass through edge detector
+    O_EDGE_SIGNAL    : out std_logic  -- Output pulse on (C_TRIGGER_EDGE) edge
+  );
+  end component edge_detector;
 
   ---------------
   -- Constants --
@@ -250,86 +233,107 @@ architecture behavioral of memory_pwm_generator_top is
   constant C_INC_DEC        : std_logic := '1';   -- Increment/decrement (decrement: '0', increment: '1')
   constant C_SHIFT_EN       : std_logic := '0';   -- Shift enable (shift off: '0', shift on: '1')
 
-  -- 7SD specific commands
-  constant C_7SD_CLEAR_DISP_CMD  : std_logic_vector(7 downto 0) := x"76";
-
   -- Mode of Operation
   -- 00: Initialization
   -- 01: Test
   -- 10: Pause
   -- 11: PWM Generation
-  constant C_INIT_MODE  : std_logic_vector(1 downto 0) := "00";
-  constant C_TEST_MODE  : std_logic_vector(1 downto 0) := "01";
-  constant C_PAUSE_MODE : std_logic_vector(1 downto 0) := "10";
-  constant C_PWM_MODE   : std_logic_vector(1 downto 0) := "11";
+  constant C_INIT_MODE      : std_logic_vector(1 downto 0) := "00";
+  constant C_TEST_MODE      : std_logic_vector(1 downto 0) := "01";
+  constant C_PAUSE_MODE     : std_logic_vector(1 downto 0) := "10";
+  constant C_PWM_MODE       : std_logic_vector(1 downto 0) := "11";
 
   -- Output Frequency
   -- 00: 60 Hz
   -- 01: 120 Hz
   -- 10: 1000 Hz (1KHz)
   -- 11: Undefined (pick one)
-  constant C_60_HZ  : std_logic_vector(1 downto 0) := "00";
-  constant C_120_HZ : std_logic_vector(1 downto 0) := "01";
-  constant C_1_KHZ  : std_logic_vector(1 downto 0) := "10";
+  constant C_60_HZ          : std_logic_vector(1 downto 0) := "00";
+  constant C_120_HZ         : std_logic_vector(1 downto 0) := "01";
+  constant C_1_KHZ          : std_logic_vector(1 downto 0) := "10";
 
   -- Inital System reset time in ms
-  constant C_RESET_TIME_MS : integer := 25;
+  constant C_RESET_TIME_MS  : integer := 25;
 
   -- Max address of SRAM and ROM (255)
-  constant C_MAX_ADDRESS   : unsigned(7 downto 0) := to_unsigned(255, 8);
+  constant C_MAX_ADDRESS    : unsigned(7 downto 0) := to_unsigned(255, 8);
 
   constant C_STABLE_TIME_MS : integer     := 10;      -- Time required for button to remain stable in ms
   constant C_TRIGGER_EDGE   : T_EDGE_TYPE := RISING;  -- Edge to trigger on
 
   -------------
-  -- SIGNALS -- -- CDL=> Line up later
+  -- SIGNALS -- -- CDL=> Clean up later
   -------------
 
-  signal s_lcd_data        : t_lcd_display_data;             -- Data to be displayed on LCD
-  signal s_lcd_lut_data    : t_lcd_display_data;             -- Data from LCD LUT
-  signal s_lcd_busy        : std_logic;                      -- Busy signal from LCD
+  signal s_lcd_data         : t_lcd_display_data;             -- Data to be displayed on LCD
+  signal s_lcd_lut_data     : t_lcd_display_data;             -- Data from LCD LUT
+  signal s_lcd_busy         : std_logic;                      -- Busy signal from LCD
 
-  signal s_i2c_busy        : std_logic;                      -- Busy signal from I2C
+  signal s_i2c_busy         : std_logic;                      -- Busy signal from I2C
 
-  signal s_curr_mode       : std_logic_vector(1 downto 0);
-  signal s_prev_mode       : std_logic_vector(1 downto 0);
-  signal s_curr_pwm_freq   : std_logic_vector(1 downto 0);
+  signal s_curr_mode        : std_logic_vector(1 downto 0);
+  signal s_prev_mode        : std_logic_vector(1 downto 0);
+  signal s_curr_pwm_freq    : std_logic_vector(1 downto 0);
 
-  signal s_curr_data       : std_logic_vector(15 downto 0) := x"FFFF";
+  signal s_curr_data        : std_logic_vector(15 downto 0) := x"FFFF";
 
   -- System reset control signal from counter (active low)
-  signal s_cntr_reset_n         : std_logic := '0';
+  signal s_cntr_reset_n     : std_logic := '0';
 
   -- Signal to toggle (increment/decrement) address
-  signal s_address_toggle       : std_logic := '0';
+  signal s_address_toggle   : std_logic := '0';
 
   -- Current counter address
-  signal s_current_address      : unsigned(17 downto 0) := (others=>'0');
+  signal s_current_address  : unsigned(17 downto 0) := (others=>'0');
 
   -- Stable button inputs
-  signal s_key_0_debounced : std_logic;
-  signal s_key_1_debounced : std_logic;
-  signal s_key_2_debounced : std_logic;
-  signal s_key_3_debounced : std_logic;
+  signal s_key_0_debounced  : std_logic;
+  signal s_key_1_debounced  : std_logic;
+  signal s_key_2_debounced  : std_logic;
+  signal s_key_3_debounced  : std_logic;
 
   -- Pulsed triggers indicating when a key was pressed
-  signal s_key_0           : std_logic;
-  signal s_key_1           : std_logic;
-  signal s_key_2           : std_logic;
-  signal s_key_3           : std_logic;
+  signal s_key_0            : std_logic;
+  signal s_key_1            : std_logic;
+  signal s_key_2            : std_logic;
+  signal s_key_3            : std_logic;
 
   -- Data from ROM memory
-  signal s_rom_data_bits        : std_logic_vector(15 downto 0);
+  signal s_rom_data_bits    : std_logic_vector(15 downto 0);
 
   -- Signals to use for SRAM
-  signal s_sram_enable          : std_logic;
-  signal s_sram_trigger         : std_logic;
-  signal s_sram_trigger_1       : std_logic;  -- Delay to fix OBO error
-  signal s_sram_rw              : std_logic;
-  signal s_sram_busy            : std_logic;
-  signal s_sram_read_data       : std_logic_vector(15 downto 0);
+  signal s_sram_enable      : std_logic;
+  signal s_sram_trigger     : std_logic;
+  signal s_sram_trigger_1   : std_logic;  -- Delay signal to fix OBO error
+  signal s_sram_rw          : std_logic;
+  signal s_sram_busy        : std_logic;
+  signal s_sram_read_data   : std_logic_vector(15 downto 0);
+
+  -- PWM signals
+  signal s_pwm_enable       : std_logic;  -- Enable/disable PWM output
 
 begin
+
+  ------------------------------
+  -- Component Instantiations --
+  ------------------------------
+
+  -- Device driver for 7SD
+  I2C_DISPLAY_DRIVER_INST: i2c_7sd_driver
+  generic map
+  (
+    C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
+  )
+  port map
+  (
+    I_CLK          => I_CLK_50_MHZ,
+    I_RESET_N      => s_cntr_reset_n,
+
+    I_DISPLAY_DATA => s_curr_data,
+    O_BUSY         => s_i2c_busy,
+    IO_I2C_SDA     => IO_I2C_SDA,
+    IO_I2C_SCL     => IO_I2C_SCL
+  );
 
   -- User logic display driver for LCD
   LCD_DISPLAY_DRIVER_INST: lcd_display_driver
@@ -375,22 +379,42 @@ begin
     O_LCD_DATA     => s_lcd_lut_data
   );
 
-  -- Device driver for 7SD
-  I2C_DISPLAY_DRIVER_INST: i2c_7sd_driver
+  -- SRAM controller to store and recall data from SRAM
+  SRAM_CONTROLLER_INST: sram_driver
   generic map
   (
     C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
   )
   port map
   (
-    I_CLK          => I_CLK_50_MHZ,
-    I_RESET_N      => s_cntr_reset_n,
-
-    I_DISPLAY_DATA => s_sram_read_data,
-    O_BUSY         => s_i2c_busy,
-    IO_I2C_SDA     => IO_I2C_SDA,
-    IO_I2C_SCL     => IO_I2C_SCL
+    I_CLK             => I_CLK_50_MHZ,
+    I_RESET_N         => s_cntr_reset_n,
+    I_SRAM_ENABLE     => s_sram_enable,
+    I_COMMAND_TRIGGER => s_sram_trigger_1,
+    I_RW              => s_sram_rw,
+    I_ADDRESS         => std_logic_vector(s_current_address),
+    I_DATA            => s_rom_data_bits,
+    O_BUSY            => s_sram_busy,
+    O_DATA            => s_sram_read_data,
+    IO_SRAM_DATA      => IO_SRAM_DATA,
+    O_SRAM_ADDR       => O_SRAM_ADDR,
+    O_SRAM_WE_N       => O_SRAM_WE_N,
+    O_SRAM_OE_N       => O_SRAM_OE_N,
+    O_SRAM_UB_N       => O_SRAM_UB_N,
+    O_SRAM_LB_N       => O_SRAM_LB_N,
+    O_SRAM_CE_N       => O_SRAM_CE_N
   );
+
+  -- Rom controller to get data from read only memory
+  ROM_CONTROLLER_INST: rom_driver
+  port map
+  (
+    address           => std_logic_vector(s_current_address)(7 downto 0),
+    clock             => I_CLK_50_MHZ,
+    q                 => s_rom_data_bits
+  );
+
+  -- CDL=> Add PWM module port/generic map
 
   -- Debounce modules for KEY0-KEY3
   KEY0_DEBOUNCE_INST: debounce_button
@@ -506,43 +530,6 @@ begin
     O_EDGE_SIGNAL  => s_key_3
   );
 
-  -- SRAM controller to store and recall data from SRAM
-  SRAM_CONTROLLER_INST: sram_driver
-  generic map
-  (
-    C_CLK_FREQ_MHZ => C_CLK_FREQ_MHZ
-  )
-  port map
-  (
-    I_CLK             => I_CLK_50_MHZ,
-    I_RESET_N         => s_cntr_reset_n,
-    I_SRAM_ENABLE     => s_sram_enable,
-    I_COMMAND_TRIGGER => s_sram_trigger_1,
-    I_RW              => s_sram_rw,
-    I_ADDRESS         => std_logic_vector(s_current_address),
-    I_DATA            => s_rom_data_bits,
-    O_BUSY            => s_sram_busy,
-    O_DATA            => s_sram_read_data,
-    IO_SRAM_DATA      => IO_SRAM_DATA,
-    O_SRAM_ADDR       => O_SRAM_ADDR,
-    O_SRAM_WE_N       => O_SRAM_WE_N,
-    O_SRAM_OE_N       => O_SRAM_OE_N,
-    O_SRAM_UB_N       => O_SRAM_UB_N,
-    O_SRAM_LB_N       => O_SRAM_LB_N,
-    O_SRAM_CE_N       => O_SRAM_CE_N
-  );
-
-  -- Rom controller to get data from read only memory
-  ROM_CONTROLLER_INST: rom_driver
-  port map
-  (
-    address           => std_logic_vector(s_current_address)(7 downto 0),
-    clock             => I_CLK_50_MHZ,
-    q                 => s_rom_data_bits
-  );
-
-  -- CDL=> Rearrange and add PWM module port map
-
   ---------------
   -- Processes --
   ---------------
@@ -607,7 +594,8 @@ begin
         v_address_toggle_cntr   := 0;
         s_address_toggle        <= '0';
 
-      -- Address index output logic (Create toggle pulse on max count)
+      -- CDL=> Clean up conditional mess with max count variable later
+      -- Address index output logic (Create toggle pulse on max count (max count differs based on mode and freq))
       elsif (((s_curr_mode = C_INIT_MODE) and (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
 
              ((s_curr_mode = C_TEST_MODE) and (v_address_toggle_cntr = C_1_HZ_MAX_COUNT)) or
@@ -646,9 +634,13 @@ begin
       -- Entering init mode
       if (s_curr_mode /= s_prev_mode) and
          (s_curr_mode = C_INIT_MODE) then
-        s_current_address   <= (others=>'1');
+        s_current_address   <= (others=>'1'); -- CDL=> 0 or 1?
 
-      -- CDL=> PWM -> Test mode?
+      -- CDL=> PWM -> Test mode? Reset address to 0?
+      -- Entering test mode from PWM gen mode
+      elsif ((s_curr_mode = C_TEST_MODE) and
+             (s_prev_mode = C_PWM_MODE)) then
+        s_current_address   <= (others=>'0');
 
       -- Increment address when toggle signal occurs and not in pause mode
       elsif ((s_address_toggle = '1') and
@@ -682,12 +674,12 @@ begin
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
 
-      -- System Init
+      -- System Init (can occcur in any mode)
       if (s_key_0 = '1') then
         s_curr_mode   <= C_INIT_MODE;
 
       -- Initialization mode
-      elsif (s_curr_mode = C_INIT_MODE) then -- CDL=> Add check for key held
+      elsif (s_curr_mode = C_INIT_MODE) then -- CDL=> Add check for key held?
        -- Wait for ROM data to be loaded into SRAM
        if (s_current_address = C_MAX_ADDRESS) and
           (s_address_toggle = '1') then
@@ -804,8 +796,13 @@ begin
       end if;
 
       -- Control SRAM command trigger
-      if (s_curr_mode /= C_PAUSE_MODE) and
-         (s_address_toggle = '1') then
+      if ((s_curr_mode /= C_PAUSE_MODE) and
+          (s_address_toggle = '1')) then
+        s_sram_trigger          <= '1';
+
+      -- Entering test mode from PWM gen mode
+      elsif ((s_curr_mode = C_TEST_MODE) and
+             (s_prev_mode = C_PWM_MODE)) then
         s_sram_trigger          <= '1';
       else
         s_sram_trigger          <= '0';
@@ -819,27 +816,57 @@ begin
   ------------------------------------------------------------------------------
 
   ------------------------------------------------------------------------------
+  -- Process Name     : PWM_DATA_CTRL
+  -- Sensitivity List : I_CLK_50_MHZ   : System clock
+  --                    s_cntr_reset_n : System reset (active low logic)
+  -- Useful Outputs   : s_pwm_enable   : Enable signal for PWM module
+  -- Description      : Process to control PWM module signals.
+  ------------------------------------------------------------------------------
+  PWM_DATA_CTRL: process (I_CLK_50_MHZ, s_cntr_reset_n)
+  begin
+    if (s_cntr_reset_n = '0') then
+      s_pwm_enable   <= '0';
+
+    elsif (rising_edge(I_CLK_50_MHZ)) then
+
+      -- Enable logic (only output waveform in PWM mode)
+      if (s_curr_mode = C_PWM_MODE) then
+        s_pwm_enable <= '1';
+      else
+        s_pwm_enable <= '0';
+      end if;
+    end if;
+  end process PWM_DATA_CTRL;
+  ------------------------------------------------------------------------------
+
+  ------------------------------------------------------------------------------
   -- Process Name     : DISPLAY_DATA_CTRL
-  -- Sensitivity List : I_CLK_50_MHZ      : System clock
-  --                    s_cntr_reset_n    : System reset (active low logic)
-  -- Useful Outputs   :
-  -- Description      : Process to control what data each display is displaying. -- CDL=> Needed/clean up later?
+  -- Sensitivity List : I_CLK_50_MHZ   : System clock
+  --                    s_cntr_reset_n : System reset (active low logic)
+  -- Useful Outputs   : s_lcd_data     : Data going to LCD display.
+  --                  : s_curr_data    : Data going to 7 seg display.
+  -- Description      : Process to control what data each display is showing.
   ------------------------------------------------------------------------------
   DISPLAY_DATA_CTRL: process (I_CLK_50_MHZ, s_cntr_reset_n)
   begin
     if (s_cntr_reset_n = '0') then
+      s_lcd_data     <= (others=>(others=>('0')));
       s_curr_data    <= x"0000";
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
+
+      -- Only latch LCD data when module is not busy
       if (s_lcd_busy = '0') then
-        s_lcd_data <= s_lcd_lut_data;
+        s_lcd_data  <= s_lcd_lut_data;
+      else
+        s_lcd_data  <= s_lcd_data;
       end if;
 
+      -- Only display data to 7 seg display when in test or pause mode
       if (s_curr_mode = C_TEST_MODE) or (s_curr_mode = C_PAUSE_MODE) then
-        s_curr_data  <= s_sram_read_data;
+        s_curr_data <= s_sram_read_data;
       else
-        s_curr_data  <= s_sram_read_data;
-        -- s_curr_data  <= x"00" & std_logic_vector(s_current_address)(7 downto 0);
+        s_curr_data <= x"0000";  -- CDL=> What should this be (display cleared?)
       end if;
     end if;
   end process DISPLAY_DATA_CTRL;

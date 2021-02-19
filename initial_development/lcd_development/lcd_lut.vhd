@@ -193,29 +193,29 @@ begin
           -- [..0xFF.:.0xFFFF.]
           O_LCD_DATA <=
           (
-            SP, SP, UT, LE, LS, LT, SP, UM, LO, LD, LE, SP, SP, SP, SP, SP,
+            SP, SP, SP, UT, LE, LS, LT, SP, UM, LO, LD, LE, SP, SP, SP, SP,
             SP, N0, LX, s_addr_ascii(1), s_addr_ascii(0), SP, CL, SP, N0, LX,
             s_data_ascii(3), s_data_ascii(2), s_data_ascii(1), s_data_ascii(0),
             SP, SP
           );
 
          when C_MODE_PAUSE =>
-          -- [..Pause.Mode....]
+          -- [...Pause.Mode...]
           -- [................]
           O_LCD_DATA <=
           (
-            SP, SP, UP, LA, LU, LS, LE, SP, UM, LO, LD, LE, SP, SP, SP, SP,
+            SP, SP, SP, UP, LA, LU, LS, LE, SP, UM, LO, LD, LE, SP, SP, SP,
             SP, N0, LX, s_addr_ascii(1), s_addr_ascii(0), SP, CL, SP, N0, LX,
             s_data_ascii(3), s_data_ascii(2), s_data_ascii(1), s_data_ascii(0),
             SP, SP
           );
 
         when C_MODE_PWM   =>
-          -- [PWM.Generation..]
+          -- [.PWM.Generation.]
           -- [..Freq.:.NNNN.Hz]
           O_LCD_DATA <=
           (
-            UP, UW, UM, SP, UG, LE, LN, LE, LR, LA, LT, LI, LO, LN, SP, SP,
+            SP, UP, UW, UM, SP, UG, LE, LN, LE, LR, LA, LT, LI, LO, LN, SP,
             SP, UF, LR, LE, LQ, SP, CL, SP, s_freq_ascii(6), s_freq_ascii(5),
             s_freq_ascii(4), s_freq_ascii(3), s_freq_ascii(2), s_freq_ascii(1),
             s_freq_ascii(0), SP
