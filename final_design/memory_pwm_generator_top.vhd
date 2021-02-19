@@ -44,6 +44,8 @@ port
   IO_I2C_SDA   : inout std_logic;  -- Serial data of i2c bus
   IO_I2C_SCL   : inout std_logic;  -- Serial clock of i2c bus
 
+  O_PWM        : out std_logic;    -- Output PWM signal
+
   -- LCD passthrough signals
   O_LCD_DATA   : out std_logic_vector(7 downto 0);
   O_LCD_ENABLE : out std_logic;
@@ -871,5 +873,40 @@ begin
     end if;
   end process DISPLAY_DATA_CTRL;
   ------------------------------------------------------------------------------
+
+--  ------------------------------------------------------------------------------
+--  -- Process Name     : PWM_COUNTER  -- CDL=> Testing. Will be moved to PWM module
+--  -- Sensitivity List : I_CLK_50_MHZ   : System clock
+--  --                    s_cntr_reset_n : System reset (active low logic)
+--  -- Useful Outputs   :
+--  --                  :
+--  -- Description      : Process to
+--  ------------------------------------------------------------------------------
+--  PWM_COUNTER: process (I_CLK_50_MHZ, s_cntr_reset_n)
+--  variable C_PWM_MAX_CNT : integer := 64;
+--  variable v_pwm_cntr    : integer range 0 TO C_PWM_MAX_CNT := 0;
+--  begin
+--    if (s_cntr_reset_n = '0') then
+--      v_pwm_cntr := 0;
+--      O_PWM      <= '0';
+--
+--    elsif (rising_edge(I_CLK_50_MHZ)) then
+--
+--      -- PWM counter logic
+--      if (v_pwm_cntr /= C_PWM_MAX_CNT) then
+--        v_pwm_cntr := v_pwm_cntr + 1;
+--      else
+--        v_pwm_cntr := 0;
+--      end if;
+--
+--      -- PWM output logic
+--      if ((s_curr_mode = C_PWM_MODE) and (v_pwm_cntr < to_integer(unsigned(s_sram_read_data(5 downto 0))))) then
+--        O_PWM <= '1';
+--      else
+--        O_PWM <= '0';
+--      end if;
+--    end if;
+--  end process PWM_COUNTER;
+--  ------------------------------------------------------------------------------
 
 end architecture behavioral;

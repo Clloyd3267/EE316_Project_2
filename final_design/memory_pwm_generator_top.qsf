@@ -63,8 +63,10 @@ set_location_assignment PIN_H3 -to O_LCD_DATA[7]
 set_location_assignment PIN_L4 -to O_LCD_ON
 set_location_assignment PIN_K2 -to O_LCD_BLON
 
-set_location_assignment PIN_P24 -to IO_I2C_SDA
-set_location_assignment PIN_R24 -to IO_I2C_SCL
+set_location_assignment PIN_K25 -to IO_I2C_SDA
+set_location_assignment PIN_K26 -to IO_I2C_SCL
+
+set_location_assignment PIN_M22 -to O_PWM
 
 set_location_assignment PIN_G26 -to I_KEY_0_N
 set_location_assignment PIN_N23 -to I_KEY_1_N
