@@ -30,6 +30,8 @@ port
   I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
   I_RESET_N      : in std_logic;                      -- System reset (active low)
 
+  I_DISP_ENABLE  : in std_logic;                      -- Whether the screen is on '1' or off '0'
+
   I_DISPLAY_DATA : in std_logic_vector(15 downto 0);  -- Data to be displayed
   O_BUSY         : out std_logic;                     -- Busy signal from I2C master
 
@@ -220,7 +222,9 @@ begin
       end if;
 
       -- Data Byte Index logic
-      if (s_7sd_curr_state = NEXT_STATE) and (s_7sd_busy = '0') then
+      if (I_DISP_ENABLE = '0') then
+        s_wr_data_byte_index <= 0;
+      elsif (s_7sd_curr_state = NEXT_STATE) and (s_7sd_busy = '0') then
           if (s_wr_data_byte_index /= C_WR_BYTE_INDEX_MAX) then
             s_wr_data_byte_index <= s_wr_data_byte_index + 1;
           else
