@@ -82,6 +82,7 @@ architecture behavioral of memory_pwm_generator_top is
   (
     I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
     I_RESET_N      : in std_logic;                      -- System reset (active low)
+    I_DISP_ENABLE  : in std_logic;                      -- Whether the screen is on '1' or off '0'
     I_DISPLAY_DATA : in std_logic_vector(15 downto 0);  -- Data to be displayed
     O_BUSY         : out std_logic;                     -- Busy signal from I2C master
     IO_I2C_SDA     : inout std_logic;                   -- Serial data of i2c bus
@@ -188,7 +189,21 @@ architecture behavioral of memory_pwm_generator_top is
   );
   end component rom_driver;
 
-  -- CDL=> Add PWM module
+  component pwm_generator is
+  generic
+  (
+    clk_freq   : integer := 50;                    -- The 50 MHz input clock
+    data_res   : integer := 6                      -- The data resolution
+  );
+  port
+  (
+    clk        : in std_logic;                     -- Pwm clock
+    rst        : in std_logic;                     -- Reset (active low)
+    en         : in std_logic;                     -- Pwm enable
+    pwm_datain : in std_logic_vector(5 downto 0);  -- Input data for pwm generator
+    pwm_out    : out std_logic                     -- The output signal
+  );
+  end component pwm_generator;
 
   component debounce_button is
   generic
@@ -263,8 +278,10 @@ architecture behavioral of memory_pwm_generator_top is
   constant C_STABLE_TIME_MS : integer     := 10;      -- Time required for button to remain stable in ms
   constant C_TRIGGER_EDGE   : T_EDGE_TYPE := RISING;  -- Edge to trigger on
 
+  constant C_PWM_DATA_RES   : integer     := 6;       -- Data resolution for PWM signal
+
   -------------
-  -- SIGNALS -- -- CDL=> Clean up later
+  -- SIGNALS --
   -------------
 
   signal s_lcd_data         : t_lcd_display_data;             -- Data to be displayed on LCD
@@ -272,9 +289,11 @@ architecture behavioral of memory_pwm_generator_top is
   signal s_lcd_busy         : std_logic;                      -- Busy signal from LCD
 
   signal s_i2c_busy         : std_logic;                      -- Busy signal from I2C
+  signal s_7sd_enable       : std_logic;                      -- Enable signal to I2C
 
   signal s_curr_mode        : std_logic_vector(1 downto 0);
   signal s_prev_mode        : std_logic_vector(1 downto 0);
+
   signal s_curr_pwm_freq    : std_logic_vector(1 downto 0);
 
   signal s_curr_data        : std_logic_vector(15 downto 0) := x"FFFF";
@@ -331,6 +350,7 @@ begin
     I_CLK          => I_CLK_50_MHZ,
     I_RESET_N      => s_cntr_reset_n,
 
+    I_DISP_ENABLE  => s_7sd_enable,
     I_DISPLAY_DATA => s_curr_data,
     O_BUSY         => s_i2c_busy,
     IO_I2C_SDA     => IO_I2C_SDA,
@@ -416,7 +436,21 @@ begin
     q                 => s_rom_data_bits
   );
 
-  -- CDL=> Add PWM module port/generic map
+  -- PWM modulation generator
+  PWM_GEN_INST: pwm_generator
+  generic map
+  (
+    clk_freq   => C_CLK_FREQ_MHZ,
+    data_res   => C_PWM_DATA_RES
+  )
+  port map
+  (
+    clk        => I_CLK_50_MHZ,
+    rst        => s_cntr_reset_n,
+    en         => s_pwm_enable,
+    pwm_datain => s_sram_read_data(15 downto 10),
+    pwm_out    => O_PWM
+  );
 
   -- Debounce modules for KEY0-KEY3
   KEY0_DEBOUNCE_INST: debounce_button
@@ -596,7 +630,6 @@ begin
         v_address_toggle_cntr   := 0;
         s_address_toggle        <= '0';
 
-      -- CDL=> Clean up conditional mess with max count variable later
       -- Address index output logic (Create toggle pulse on max count (max count differs based on mode and freq))
       elsif (((s_curr_mode = C_INIT_MODE) and (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
 
@@ -604,11 +637,11 @@ begin
 
              ((s_curr_mode = C_PWM_MODE) and
              (((s_curr_pwm_freq = C_60_HZ) and
-              (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
+              (v_address_toggle_cntr = C_SINE_60_HZ_MAX_COUNT)) or
               ((s_curr_pwm_freq = C_120_HZ) and
-              (v_address_toggle_cntr = C_255_HZ_MAX_COUNT)) or
+              (v_address_toggle_cntr = C_SINE_120_HZ_MAX_COUNT)) or
               ((s_curr_pwm_freq = C_1_KHZ) and
-              (v_address_toggle_cntr = C_255_HZ_MAX_COUNT))))) then
+              (v_address_toggle_cntr = C_SINE_1_KHZ_MAX_COUNT))))) then
         v_address_toggle_cntr   := 0;
         s_address_toggle        <= '1';
       else
@@ -636,9 +669,8 @@ begin
       -- Entering init mode
       if (s_curr_mode /= s_prev_mode) and
          (s_curr_mode = C_INIT_MODE) then
-        s_current_address   <= (others=>'1'); -- CDL=> 0 or 1?
+        s_current_address   <= (others=>'1');
 
-      -- CDL=> PWM -> Test mode? Reset address to 0?
       -- Entering test mode from PWM gen mode
       elsif ((s_curr_mode = C_TEST_MODE) and
              (s_prev_mode = C_PWM_MODE)) then
@@ -846,7 +878,8 @@ begin
   -- Sensitivity List : I_CLK_50_MHZ   : System clock
   --                    s_cntr_reset_n : System reset (active low logic)
   -- Useful Outputs   : s_lcd_data     : Data going to LCD display.
-  --                  : s_curr_data    : Data going to 7 seg display.
+  --                    s_curr_data    : Data going to 7 seg display.
+  --                    s_7sd_enable   : Enable signal for 7SD display.
   -- Description      : Process to control what data each display is showing.
   ------------------------------------------------------------------------------
   DISPLAY_DATA_CTRL: process (I_CLK_50_MHZ, s_cntr_reset_n)
@@ -854,59 +887,28 @@ begin
     if (s_cntr_reset_n = '0') then
       s_lcd_data     <= (others=>(others=>('0')));
       s_curr_data    <= x"0000";
+      s_7sd_enable   <= '0';
 
     elsif (rising_edge(I_CLK_50_MHZ)) then
 
       -- Only latch LCD data when module is not busy
       if (s_lcd_busy = '0') then
-        s_lcd_data  <= s_lcd_lut_data;
+        s_lcd_data   <= s_lcd_lut_data;
       else
-        s_lcd_data  <= s_lcd_data;
+        s_lcd_data   <= s_lcd_data;
       end if;
+
+      -- Latch SRAM read data
+      s_curr_data    <= s_sram_read_data;
 
       -- Only display data to 7 seg display when in test or pause mode
       if (s_curr_mode = C_TEST_MODE) or (s_curr_mode = C_PAUSE_MODE) then
-        s_curr_data <= s_sram_read_data;
+        s_7sd_enable <= '1';
       else
-        s_curr_data <= x"0000";  -- CDL=> What should this be (display cleared?)
+        s_7sd_enable <= '0';
       end if;
     end if;
   end process DISPLAY_DATA_CTRL;
   ------------------------------------------------------------------------------
-
---  ------------------------------------------------------------------------------
---  -- Process Name     : PWM_COUNTER  -- CDL=> Testing. Will be moved to PWM module
---  -- Sensitivity List : I_CLK_50_MHZ   : System clock
---  --                    s_cntr_reset_n : System reset (active low logic)
---  -- Useful Outputs   :
---  --                  :
---  -- Description      : Process to
---  ------------------------------------------------------------------------------
---  PWM_COUNTER: process (I_CLK_50_MHZ, s_cntr_reset_n)
---  variable C_PWM_MAX_CNT : integer := 64;
---  variable v_pwm_cntr    : integer range 0 TO C_PWM_MAX_CNT := 0;
---  begin
---    if (s_cntr_reset_n = '0') then
---      v_pwm_cntr := 0;
---      O_PWM      <= '0';
---
---    elsif (rising_edge(I_CLK_50_MHZ)) then
---
---      -- PWM counter logic
---      if (v_pwm_cntr /= C_PWM_MAX_CNT) then
---        v_pwm_cntr := v_pwm_cntr + 1;
---      else
---        v_pwm_cntr := 0;
---      end if;
---
---      -- PWM output logic
---      if ((s_curr_mode = C_PWM_MODE) and (v_pwm_cntr < to_integer(unsigned(s_sram_read_data(5 downto 0))))) then
---        O_PWM <= '1';
---      else
---        O_PWM <= '0';
---      end if;
---    end if;
---  end process PWM_COUNTER;
---  ------------------------------------------------------------------------------
 
 end architecture behavioral;
